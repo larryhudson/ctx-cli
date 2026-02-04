@@ -12,7 +12,7 @@ from rich.console import Console
 from rich.table import Table
 
 from ctx import db
-from ctx.ingest import SlackIngester
+from ctx.ingest import ObsidianIngester, SlackIngester
 from ctx.ingest.base import parse_since
 from ctx.models import Source
 
@@ -192,6 +192,41 @@ def ingest_slack(
         ingester = SlackIngester()
         count = ingester.ingest(since=since_dt, full_reindex=full)
         console.print(f"[green]Ingested {count} documents from Slack.[/green]")
+    except ValueError as e:
+        console.print(f"[red]Configuration error: {e}[/red]")
+        raise typer.Exit(1) from None
+    except Exception as e:
+        console.print(f"[red]Ingestion failed: {e}[/red]")
+        raise typer.Exit(1) from None
+
+
+@ingest_app.command("obsidian")
+def ingest_obsidian(
+    vault_path: Annotated[
+        Path | None,
+        typer.Option("--vault", "-v", help="Path to Obsidian vault (overrides config)"),
+    ] = None,
+    since: Annotated[
+        str | None,
+        typer.Option("--since", help="Only ingest files modified since (e.g., 7d, 24h, 2w)"),
+    ] = None,
+    full: Annotated[
+        bool,
+        typer.Option("--full", help="Full re-index (clear existing documents first)"),
+    ] = False,
+) -> None:
+    """Ingest markdown notes from an Obsidian vault."""
+    # Load environment variables from .env
+    load_dotenv(Path.cwd() / ".env")
+
+    since_dt = parse_since(since)
+
+    console.print("[bold]Ingesting Obsidian vault...[/bold]")
+
+    try:
+        ingester = ObsidianIngester(vault_path=vault_path)
+        count = ingester.ingest(since=since_dt, full_reindex=full)
+        console.print(f"[green]Ingested {count} documents from Obsidian.[/green]")
     except ValueError as e:
         console.print(f"[red]Configuration error: {e}[/red]")
         raise typer.Exit(1) from None
