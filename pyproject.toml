@@ -1,23 +1,36 @@
 [project]
-name = "work-context"
+name = "ctx"
 version = "0.1.0"
-description = "Add your description here"
+description = "Aggregate and search work context from Slack, Linear, GitHub, Notion, and Obsidian"
 readme = "README.md"
 requires-python = ">=3.12"
-dependencies = []
+dependencies = [
+    "chromadb>=1.0.0",
+    "pydantic>=2.0.0",
+    "pydantic-settings>=2.0.0",
+    "python-dotenv>=1.0.0",
+    "typer>=0.15.0",
+    "rich>=13.0.0",
+    "httpx>=0.28.0",
+    "tiktoken>=0.9.0",
+]
+
+[project.scripts]
+ctx = "ctx.cli.main:app"
 
 [build-system]
 requires = ["hatchling"]
 build-backend = "hatchling.build"
 
 [tool.hatch.build.targets.wheel]
-packages = ["src/work_context"]
+packages = ["src/ctx"]
 
 [dependency-groups]
 dev = [
     "ruff>=0.9.0",
     "prek>=0.3.0",
     "ty>=0.0.14",
+    "pytest>=8.0.0",
 ]
 
 # Ruff configuration - strict defaults
@@ -69,9 +82,9 @@ ignore = [
     "ISC001",  # Conflicts with formatter
     "TRY003",  # Long messages in exceptions are fine
     "PLR0913", # Too many arguments - sometimes necessary
-    "TC001",   # pydantic-ai needs runtime access to first-party types
-    "TC002",   # pydantic-ai needs runtime access to third-party types
-    "TC003",   # pydantic-ai needs runtime access to stdlib types
+    "TC001",   # pydantic needs runtime access to first-party types
+    "TC002",   # pydantic needs runtime access to third-party types
+    "TC003",   # pydantic needs runtime access to stdlib types
 ]
 
 [tool.ruff.lint.per-file-ignores]
@@ -82,7 +95,7 @@ ignore = [
 ]
 
 [tool.ruff.lint.isort]
-known-first-party = ["work_context"]
+known-first-party = ["ctx"]
 
 [tool.ruff.lint.pylint]
 max-args = 8
