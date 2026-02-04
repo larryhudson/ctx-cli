@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+from datetime import UTC, datetime
 from pathlib import Path
 from typing import Annotated
 
@@ -12,7 +13,13 @@ from rich.console import Console
 from rich.table import Table
 
 from ctx import db
-from ctx.ingest import ObsidianIngester, SlackIngester
+from ctx.ingest import (
+    GitHubIngester,
+    LinearIngester,
+    NotionIngester,
+    ObsidianIngester,
+    SlackIngester,
+)
 from ctx.ingest.base import parse_since
 from ctx.models import Source
 
@@ -53,8 +60,8 @@ def search(
     ] = 10,
     output_format: Annotated[
         str,
-        typer.Option("--format", "-f", help="Output format: table or json"),
-    ] = "table",
+        typer.Option("--format", "-f", help="Output format: markdown, table, or json"),
+    ] = "markdown",
 ) -> None:
     """Search across all indexed work context."""
     # Parse sources
@@ -90,6 +97,8 @@ def search(
     # Output results
     if output_format == "json":
         console.print(json.dumps(results, indent=2))
+    elif output_format in {"markdown", "md"}:
+        _print_results_markdown(results)
     else:
         _print_results_table(results)
 
@@ -119,6 +128,38 @@ def _print_results_table(results: list[dict]) -> None:
         table.add_row(source, content, link, distance_str)
 
     console.print(table)
+
+
+def _format_timestamp(ts: int | None) -> str:
+    """Format a Unix timestamp as a human-readable date/time."""
+    if ts is None:
+        return ""
+    dt = datetime.fromtimestamp(ts, tz=UTC)
+    return dt.strftime("%Y-%m-%d %H:%M")
+
+
+def _print_results_markdown(results: list[dict]) -> None:
+    """Print search results in a token-efficient markdown format."""
+    for i, result in enumerate(results):
+        metadata = result.get("metadata", {})
+        content = result.get("content", "")
+        permalink = metadata.get("permalink", "")
+        timestamp = metadata.get("timestamp")
+
+        # Format timestamp
+        time_str = _format_timestamp(timestamp)
+
+        # Print result
+        if i > 0:
+            console.print("---")
+        console.print(content)
+        if time_str or permalink:
+            footer_parts = []
+            if time_str:
+                footer_parts.append(time_str)
+            if permalink:
+                footer_parts.append(permalink)
+            console.print(f"\n[dim]{' | '.join(footer_parts)}[/dim]")
 
 
 @app.command()
@@ -192,6 +233,99 @@ def ingest_slack(
         ingester = SlackIngester()
         count = ingester.ingest(since=since_dt, full_reindex=full)
         console.print(f"[green]Ingested {count} documents from Slack.[/green]")
+    except ValueError as e:
+        console.print(f"[red]Configuration error: {e}[/red]")
+        raise typer.Exit(1) from None
+    except Exception as e:
+        console.print(f"[red]Ingestion failed: {e}[/red]")
+        raise typer.Exit(1) from None
+
+
+@ingest_app.command("github")
+def ingest_github(
+    since: Annotated[
+        str | None,
+        typer.Option("--since", help="Only ingest PRs updated since (e.g., 7d, 24h, 2w)"),
+    ] = None,
+    full: Annotated[
+        bool,
+        typer.Option("--full", help="Full re-index (clear existing documents first)"),
+    ] = False,
+) -> None:
+    """Ingest GitHub PRs you've authored or reviewed."""
+    # Load environment variables from .env
+    load_dotenv(Path.cwd() / ".env")
+
+    since_dt = parse_since(since)
+
+    console.print("[bold]Ingesting GitHub PRs...[/bold]")
+
+    try:
+        ingester = GitHubIngester()
+        count = ingester.ingest(since=since_dt, full_reindex=full)
+        console.print(f"[green]Ingested {count} documents from GitHub.[/green]")
+    except ValueError as e:
+        console.print(f"[red]Configuration error: {e}[/red]")
+        raise typer.Exit(1) from None
+    except Exception as e:
+        console.print(f"[red]Ingestion failed: {e}[/red]")
+        raise typer.Exit(1) from None
+
+
+@ingest_app.command("linear")
+def ingest_linear(
+    since: Annotated[
+        str | None,
+        typer.Option("--since", help="Only ingest issues updated since (e.g., 7d, 24h, 2w)"),
+    ] = None,
+    full: Annotated[
+        bool,
+        typer.Option("--full", help="Full re-index (clear existing documents first)"),
+    ] = False,
+) -> None:
+    """Ingest Linear issues you're involved with."""
+    # Load environment variables from .env
+    load_dotenv(Path.cwd() / ".env")
+
+    since_dt = parse_since(since)
+
+    console.print("[bold]Ingesting Linear issues...[/bold]")
+
+    try:
+        ingester = LinearIngester()
+        count = ingester.ingest(since=since_dt, full_reindex=full)
+        console.print(f"[green]Ingested {count} documents from Linear.[/green]")
+    except ValueError as e:
+        console.print(f"[red]Configuration error: {e}[/red]")
+        raise typer.Exit(1) from None
+    except Exception as e:
+        console.print(f"[red]Ingestion failed: {e}[/red]")
+        raise typer.Exit(1) from None
+
+
+@ingest_app.command("notion")
+def ingest_notion(
+    since: Annotated[
+        str | None,
+        typer.Option("--since", help="Only ingest pages updated since (e.g., 7d, 24h, 2w)"),
+    ] = None,
+    full: Annotated[
+        bool,
+        typer.Option("--full", help="Full re-index (clear existing documents first)"),
+    ] = False,
+) -> None:
+    """Ingest Notion pages the integration has access to."""
+    # Load environment variables from .env
+    load_dotenv(Path.cwd() / ".env")
+
+    since_dt = parse_since(since)
+
+    console.print("[bold]Ingesting Notion pages...[/bold]")
+
+    try:
+        ingester = NotionIngester()
+        count = ingester.ingest(since=since_dt, full_reindex=full)
+        console.print(f"[green]Ingested {count} documents from Notion.[/green]")
     except ValueError as e:
         console.print(f"[red]Configuration error: {e}[/red]")
         raise typer.Exit(1) from None
