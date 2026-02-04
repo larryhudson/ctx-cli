@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import logging
-import os
 import subprocess
 import time
 from datetime import UTC, datetime
@@ -85,20 +84,17 @@ class GitHubIngester(BaseIngester):
 
     def __init__(self) -> None:
         """Initialize the GitHub ingester."""
-        # Try environment variable first, then config, then gh CLI
-        token = os.environ.get("GITHUB_TOKEN")
+        config = get_config()
 
-        if not token:
-            config = get_config()
-            token = config.github.token
-
+        # Try config first, then gh CLI
+        token = config.github.token
         if not token:
             token = self._get_gh_cli_token()
 
         if not token:
             msg = (
-                "GitHub token not configured. Set GITHUB_TOKEN environment variable, "
-                "configure github.token in config.toml, or authenticate with `gh auth login`"
+                "GitHub token not configured. Set github.token in ~/.config/ctx/config.toml "
+                "or authenticate with `gh auth login`"
             )
             raise ValueError(msg)
 
@@ -108,7 +104,6 @@ class GitHubIngester(BaseIngester):
         self._last_api_call: float = 0
 
         # Get configured repos (optional filtering)
-        config = get_config()
         self._repos = config.github.repos
 
     def _get_gh_cli_token(self) -> str | None:

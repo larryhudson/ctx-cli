@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import logging
-import os
 import re
 import time
 from datetime import UTC, datetime
@@ -43,18 +42,14 @@ class SlackIngester(BaseIngester):
 
     def __init__(self) -> None:
         """Initialize the Slack ingester with browser tokens."""
-        # Try environment variables first, then config
-        self._xoxc_token = os.environ.get("SLACK_XOXC_TOKEN")
-        self._xoxd_token = os.environ.get("SLACK_XOXD_TOKEN")
-
-        if not self._xoxc_token or not self._xoxd_token:
-            config = get_config()
-            self._xoxc_token = self._xoxc_token or config.slack.token
+        config = get_config()
+        self._xoxc_token = config.slack.token
+        self._xoxd_token = config.slack.cookie
 
         if not self._xoxc_token or not self._xoxd_token:
             msg = (
-                "Slack tokens not configured. Set SLACK_XOXC_TOKEN and SLACK_XOXD_TOKEN "
-                "environment variables or configure slack.token in config.toml"
+                "Slack tokens not configured. Set slack.token and slack.cookie "
+                "in ~/.config/ctx/config.toml"
             )
             raise ValueError(msg)
 

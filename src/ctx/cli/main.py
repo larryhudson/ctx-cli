@@ -8,7 +8,6 @@ from pathlib import Path
 from typing import Annotated
 
 import typer
-from dotenv import load_dotenv
 from rich.console import Console
 from rich.table import Table
 
@@ -222,9 +221,6 @@ def ingest_slack(
     ] = False,
 ) -> None:
     """Ingest Slack threads you've participated in."""
-    # Load environment variables from .env
-    load_dotenv(Path.cwd() / ".env")
-
     since_dt = parse_since(since)
 
     console.print("[bold]Ingesting Slack...[/bold]")
@@ -253,9 +249,6 @@ def ingest_github(
     ] = False,
 ) -> None:
     """Ingest GitHub PRs you've authored or reviewed."""
-    # Load environment variables from .env
-    load_dotenv(Path.cwd() / ".env")
-
     since_dt = parse_since(since)
 
     console.print("[bold]Ingesting GitHub PRs...[/bold]")
@@ -284,9 +277,6 @@ def ingest_linear(
     ] = False,
 ) -> None:
     """Ingest Linear issues you're involved with."""
-    # Load environment variables from .env
-    load_dotenv(Path.cwd() / ".env")
-
     since_dt = parse_since(since)
 
     console.print("[bold]Ingesting Linear issues...[/bold]")
@@ -315,9 +305,6 @@ def ingest_notion(
     ] = False,
 ) -> None:
     """Ingest Notion pages the integration has access to."""
-    # Load environment variables from .env
-    load_dotenv(Path.cwd() / ".env")
-
     since_dt = parse_since(since)
 
     console.print("[bold]Ingesting Notion pages...[/bold]")
@@ -350,9 +337,6 @@ def ingest_obsidian(
     ] = False,
 ) -> None:
     """Ingest markdown notes from an Obsidian vault."""
-    # Load environment variables from .env
-    load_dotenv(Path.cwd() / ".env")
-
     since_dt = parse_since(since)
 
     console.print("[bold]Ingesting Obsidian vault...[/bold]")

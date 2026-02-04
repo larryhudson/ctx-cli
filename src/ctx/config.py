@@ -36,7 +36,8 @@ class EmbeddingConfig(BaseModel):
 class SlackConfig(BaseModel):
     """Slack configuration."""
 
-    token: str | None = None
+    token: str | None = None  # xoxc token
+    cookie: str | None = None  # xoxd cookie
     channels: list[str] = Field(default_factory=list)
 
 
@@ -58,6 +59,8 @@ class NotionConfig(BaseModel):
 
     token: str | None = None
     root_pages: list[str] = Field(default_factory=list)
+    user_id: str | None = None  # For involvement detection
+    user_name: str | None = None  # For mention detection
 
 
 class ObsidianConfig(BaseModel):

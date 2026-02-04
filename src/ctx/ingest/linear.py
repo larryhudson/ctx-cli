@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import logging
-import os
 from datetime import UTC, datetime
 from typing import Any
 
@@ -34,17 +33,11 @@ class LinearIngester(BaseIngester):
 
     def __init__(self) -> None:
         """Initialize the Linear ingester."""
-        self._api_key: str | None = os.environ.get("LINEAR_API_KEY")
+        config = get_config()
+        self._api_key = config.linear.api_key
 
         if not self._api_key:
-            config = get_config()
-            self._api_key = config.linear.api_key
-
-        if not self._api_key:
-            msg = (
-                "Linear API key not configured. Set LINEAR_API_KEY environment variable "
-                "or configure linear.api_key in config.toml"
-            )
+            msg = "Linear API key not configured. Set linear.api_key in ~/.config/ctx/config.toml"
             raise ValueError(msg)
 
         self._client = httpx.Client(timeout=30.0)

@@ -4,7 +4,6 @@ from __future__ import annotations
 
 import asyncio
 import logging
-import os
 from datetime import UTC, datetime
 from functools import partial
 from typing import TYPE_CHECKING, Any, cast
@@ -179,18 +178,11 @@ class NotionIngester(BaseIngester):
 
     def __init__(self) -> None:
         """Initialize the Notion ingester."""
-        # Try environment variable first, then config
-        token = os.environ.get("NOTION_TOKEN")
+        config = get_config()
+        token = config.notion.token
 
         if not token:
-            config = get_config()
-            token = config.notion.token
-
-        if not token:
-            msg = (
-                "Notion token not configured. Set NOTION_TOKEN environment variable "
-                "or configure notion.token in config.toml"
-            )
+            msg = "Notion token not configured. Set notion.token in ~/.config/ctx/config.toml"
             raise ValueError(msg)
 
         self._token = token
@@ -200,12 +192,11 @@ class NotionIngester(BaseIngester):
         self._workspace_name: str | None = None
 
         # User identification for involvement detection
-        self._my_user_id = os.environ.get("NOTION_USER_ID")
-        self._my_user_name = os.environ.get("NOTION_USER_NAME")
+        self._my_user_id = config.notion.user_id
+        self._my_user_name = config.notion.user_name
 
         # Root pages to crawl (if set, only crawl these instead of searching all)
-        root_pages_str = os.environ.get("NOTION_ROOT_PAGES", "")
-        self._root_pages = [p.strip() for p in root_pages_str.split(",") if p.strip()]
+        self._root_pages = config.notion.root_pages
 
     @property
     def source(self) -> Source:

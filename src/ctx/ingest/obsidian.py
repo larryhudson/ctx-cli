@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import logging
-import os
 import re
 from datetime import UTC, datetime
 from pathlib import Path
@@ -41,26 +40,18 @@ class ObsidianIngester(BaseIngester):
         """Initialize the Obsidian ingester.
 
         Args:
-            vault_path: Path to the Obsidian vault. If not provided,
-                        uses config or OBSIDIAN_VAULT_PATH env var.
+            vault_path: Path to the Obsidian vault. If not provided, uses config.
         """
         resolved_path: Path | None = vault_path
 
         if not resolved_path:
-            # Try environment variable
-            env_path = os.environ.get("OBSIDIAN_VAULT_PATH")
-            if env_path:
-                resolved_path = Path(env_path)
-
-        if not resolved_path:
-            # Try config
             config = get_config()
             resolved_path = config.obsidian.vault_path
 
         if not resolved_path:
             msg = (
-                "Obsidian vault path not configured. Set OBSIDIAN_VAULT_PATH "
-                "environment variable or configure obsidian.vault_path in config.toml"
+                "Obsidian vault path not configured. "
+                "Set obsidian.vault_path in ~/.config/ctx/config.toml"
             )
             raise ValueError(msg)
 

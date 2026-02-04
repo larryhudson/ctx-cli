@@ -13,18 +13,18 @@ Source code lives in `src/ctx/`. See `SPEC.md` for the full specification.
 ```
 src/ctx/
 ├── models.py      # Pydantic models: Source, ContentType, Involvement, DocumentMetadata, Document
-├── config.py      # Config loading from ~/.config/ctx/config.toml + env vars
+├── config.py      # Config loading from ~/.config/ctx/config.toml
 ├── db.py          # ChromaDB connection (Database singleton), search/add/delete operations
 ├── chunking.py    # Text chunking utilities (token-based, paragraph-aware)
 ├── ingest/
 │   ├── base.py    # BaseIngester ABC - subclass for each source
-│   ├── slack.py   # (TODO)
-│   ├── linear.py  # (TODO)
-│   ├── github.py  # (TODO)
-│   ├── notion.py  # (TODO)
-│   └── obsidian.py # (TODO)
+│   ├── slack.py   # Slack threads (browser tokens)
+│   ├── linear.py  # Linear issues (GraphQL API)
+│   ├── github.py  # GitHub PRs (GraphQL API)
+│   ├── notion.py  # Notion pages (official SDK)
+│   └── obsidian.py # Obsidian notes (filesystem)
 └── cli/
-    └── main.py    # Typer CLI: search, info, get commands
+    └── main.py    # Typer CLI: search, info, get, ingest commands
 ```
 
 ### Key Components
