@@ -157,18 +157,45 @@ class SlackIngester(BaseIngester):
         return f"https://{self._workspace}.slack.com/archives/{channel_id}/p{ts_without_dot}"
 
     def _get_channel_info(self, channel_id: str) -> dict[str, str]:
-        """Get channel info (name, etc.), with caching."""
+        """Get channel info (name, type, DM partner), with caching."""
         if channel_id not in self._channel_cache:
             try:
                 data = self._api_call("conversations.info", channel=channel_id)
                 channel = data.get("channel", {})
-                self._channel_cache[channel_id] = {
-                    "name": channel.get("name", channel_id),
-                    "id": channel_id,
-                }
+                is_im = channel.get("is_im", False)
+                is_mpim = channel.get("is_mpim", False)
+
+                if is_im:
+                    # Direct message - get the other user's name
+                    dm_user_id = channel.get("user", "")
+                    dm_user_name = self._get_username(dm_user_id) if dm_user_id else "Unknown"
+                    self._channel_cache[channel_id] = {
+                        "name": dm_user_name,
+                        "id": channel_id,
+                        "type": "dm",
+                        "dm_user": dm_user_name,
+                    }
+                elif is_mpim:
+                    # Multi-person DM / group DM
+                    self._channel_cache[channel_id] = {
+                        "name": channel.get("name", channel_id),
+                        "id": channel_id,
+                        "type": "group_dm",
+                    }
+                else:
+                    # Regular channel
+                    self._channel_cache[channel_id] = {
+                        "name": channel.get("name", channel_id),
+                        "id": channel_id,
+                        "type": "channel",
+                    }
             except Exception:
                 logger.warning("Failed to get channel info for %s", channel_id)
-                self._channel_cache[channel_id] = {"name": channel_id, "id": channel_id}
+                self._channel_cache[channel_id] = {
+                    "name": channel_id,
+                    "id": channel_id,
+                    "type": "unknown",
+                }
         return self._channel_cache[channel_id]
 
     def _determine_involvement(self, messages: list[dict], user_id: str) -> Involvement:
@@ -202,15 +229,33 @@ class SlackIngester(BaseIngester):
         text = re.sub(r"<(https?://[^|>]+)\|[^>]+>", r"\1", text)
         return re.sub(r"<(https?://[^>]+)>", r"\1", text)
 
-    def _format_thread_content(self, messages: list[dict]) -> str:
-        """Format thread messages into a single document content."""
-        lines: list[str] = []
+    def _format_thread_content(self, messages: list[dict], channel_info: dict[str, str]) -> str:
+        """Format thread messages into a single document content.
 
-        for msg in messages:
+        The first message includes channel context (e.g., "in #channel" or "in DM to Person").
+        """
+        lines: list[str] = []
+        channel_type = channel_info.get("type", "unknown")
+        channel_name = channel_info.get("name", "")
+
+        for i, msg in enumerate(messages):
             user_id = msg.get("user", "unknown")
             username = self._get_username(user_id)
             text = self._clean_message_text(msg.get("text", ""))
-            lines.append(f"{username}: {text}")
+
+            if i == 0:
+                # First message includes channel context
+                if channel_type == "dm":
+                    dm_user = channel_info.get("dm_user", channel_name)
+                    lines.append(f"{username} in DM with {dm_user}: {text}")
+                elif channel_type == "group_dm":
+                    lines.append(f"{username} in group DM: {text}")
+                elif channel_type == "channel":
+                    lines.append(f"{username} in #{channel_name}: {text}")
+                else:
+                    lines.append(f"{username}: {text}")
+            else:
+                lines.append(f"{username}: {text}")
 
         return "\n\n".join(lines)
 
@@ -438,7 +483,7 @@ class SlackIngester(BaseIngester):
         author = self._get_username(author_id)
 
         # Format content
-        content = self._format_thread_content(messages)
+        content = self._format_thread_content(messages, channel_info)
 
         # Parse timestamp
         thread_timestamp = int(float(thread_ts))
