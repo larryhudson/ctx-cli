@@ -3,8 +3,7 @@
 from __future__ import annotations
 
 from datetime import UTC, datetime
-from pathlib import Path
-from typing import Annotated
+from typing import Annotated, NamedTuple
 
 import typer
 from rich.console import Console
@@ -16,7 +15,7 @@ from ctx.ingest import (
     ObsidianIngester,
     SlackIngester,
 )
-from ctx.ingest.base import parse_since
+from ctx.ingest.base import BaseIngester, parse_since
 from ctx.models import Source
 from ctx.sync_state import get_all_sync_state, get_last_synced_at, set_last_synced_at
 
@@ -61,32 +60,25 @@ ingest_app = typer.Typer(help="Ingest data from sources.")
 app.add_typer(ingest_app, name="ingest")
 
 
-@ingest_app.command("slack")
-def ingest_slack(
-    since: Annotated[
-        str | None,
-        typer.Option("--since", help="Only ingest items from this time period (e.g., 7d, 24h, 2w)"),
-    ] = None,
-    full: Annotated[
-        bool,
-        typer.Option("--full", help="Full re-index (clear existing documents first)"),
-    ] = False,
+def _run_ingest(
+    ingester: BaseIngester,
+    since: str | None,
+    full: bool,
 ) -> None:
-    """Ingest Slack threads you've participated in."""
+    """Shared ingestion logic for all sources."""
+    source = ingester.source
     since_dt = parse_since(since)
     if since_dt is None and not full:
-        since_dt = get_last_synced_at(Source.SLACK)
+        since_dt = get_last_synced_at(source)
         if since_dt:
             console.print(f"[dim]Resuming from last sync: {since_dt:%Y-%m-%d %H:%M}[/dim]")
 
     capture_time = datetime.now(tz=UTC)
-    console.print("[bold]Ingesting Slack...[/bold]")
 
     try:
-        ingester = SlackIngester()
         count = ingester.ingest(since=since_dt, full_reindex=full)
-        set_last_synced_at(Source.SLACK, capture_time)
-        console.print(f"[green]Ingested {count} documents from Slack.[/green]")
+        set_last_synced_at(source, capture_time)
+        console.print(f"[green]Ingested {count} documents from {source.value}.[/green]")
     except ValueError as e:
         console.print(f"[red]Configuration error: {e}[/red]")
         raise typer.Exit(1) from None
@@ -95,144 +87,41 @@ def ingest_slack(
         raise typer.Exit(1) from None
 
 
-@ingest_app.command("github")
-def ingest_github(
-    since: Annotated[
-        str | None,
-        typer.Option("--since", help="Only ingest PRs updated since (e.g., 7d, 24h, 2w)"),
-    ] = None,
-    full: Annotated[
-        bool,
-        typer.Option("--full", help="Full re-index (clear existing documents first)"),
-    ] = False,
+class _IngesterEntry(NamedTuple):
+    name: str
+    help: str
+    cls: type[BaseIngester]
+
+
+_INGESTERS = [
+    _IngesterEntry("slack", "Ingest Slack threads you've participated in.", SlackIngester),
+    _IngesterEntry("github", "Ingest GitHub PRs you've authored or reviewed.", GitHubIngester),
+    _IngesterEntry("linear", "Ingest Linear issues you're involved with.", LinearIngester),
+    _IngesterEntry("notion", "Ingest Notion pages the integration has access to.", NotionIngester),
+    _IngesterEntry("obsidian", "Ingest markdown notes from an Obsidian vault.", ObsidianIngester),
+]
+
+
+def _make_ingest_command(
+    ingester_cls: type[BaseIngester],
 ) -> None:
-    """Ingest GitHub PRs you've authored or reviewed."""
-    since_dt = parse_since(since)
-    if since_dt is None and not full:
-        since_dt = get_last_synced_at(Source.GITHUB)
-        if since_dt:
-            console.print(f"[dim]Resuming from last sync: {since_dt:%Y-%m-%d %H:%M}[/dim]")
+    def command(
+        since: Annotated[
+            str | None,
+            typer.Option("--since", help="Only ingest items updated since (e.g., 7d, 24h, 2w)"),
+        ] = None,
+        full: Annotated[
+            bool,
+            typer.Option("--full", help="Full re-index (clear existing documents first)"),
+        ] = False,
+    ) -> None:
+        _run_ingest(ingester_cls(), since, full)
 
-    capture_time = datetime.now(tz=UTC)
-    console.print("[bold]Ingesting GitHub PRs...[/bold]")
-
-    try:
-        ingester = GitHubIngester()
-        count = ingester.ingest(since=since_dt, full_reindex=full)
-        set_last_synced_at(Source.GITHUB, capture_time)
-        console.print(f"[green]Ingested {count} documents from GitHub.[/green]")
-    except ValueError as e:
-        console.print(f"[red]Configuration error: {e}[/red]")
-        raise typer.Exit(1) from None
-    except Exception as e:
-        console.print(f"[red]Ingestion failed: {e}[/red]")
-        raise typer.Exit(1) from None
+    return command  # type: ignore[return-value]
 
 
-@ingest_app.command("linear")
-def ingest_linear(
-    since: Annotated[
-        str | None,
-        typer.Option("--since", help="Only ingest issues updated since (e.g., 7d, 24h, 2w)"),
-    ] = None,
-    full: Annotated[
-        bool,
-        typer.Option("--full", help="Full re-index (clear existing documents first)"),
-    ] = False,
-) -> None:
-    """Ingest Linear issues you're involved with."""
-    since_dt = parse_since(since)
-    if since_dt is None and not full:
-        since_dt = get_last_synced_at(Source.LINEAR)
-        if since_dt:
-            console.print(f"[dim]Resuming from last sync: {since_dt:%Y-%m-%d %H:%M}[/dim]")
-
-    capture_time = datetime.now(tz=UTC)
-    console.print("[bold]Ingesting Linear issues...[/bold]")
-
-    try:
-        ingester = LinearIngester()
-        count = ingester.ingest(since=since_dt, full_reindex=full)
-        set_last_synced_at(Source.LINEAR, capture_time)
-        console.print(f"[green]Ingested {count} documents from Linear.[/green]")
-    except ValueError as e:
-        console.print(f"[red]Configuration error: {e}[/red]")
-        raise typer.Exit(1) from None
-    except Exception as e:
-        console.print(f"[red]Ingestion failed: {e}[/red]")
-        raise typer.Exit(1) from None
-
-
-@ingest_app.command("notion")
-def ingest_notion(
-    since: Annotated[
-        str | None,
-        typer.Option("--since", help="Only ingest pages updated since (e.g., 7d, 24h, 2w)"),
-    ] = None,
-    full: Annotated[
-        bool,
-        typer.Option("--full", help="Full re-index (clear existing documents first)"),
-    ] = False,
-) -> None:
-    """Ingest Notion pages the integration has access to."""
-    since_dt = parse_since(since)
-    if since_dt is None and not full:
-        since_dt = get_last_synced_at(Source.NOTION)
-        if since_dt:
-            console.print(f"[dim]Resuming from last sync: {since_dt:%Y-%m-%d %H:%M}[/dim]")
-
-    capture_time = datetime.now(tz=UTC)
-    console.print("[bold]Ingesting Notion pages...[/bold]")
-
-    try:
-        ingester = NotionIngester()
-        count = ingester.ingest(since=since_dt, full_reindex=full)
-        set_last_synced_at(Source.NOTION, capture_time)
-        console.print(f"[green]Ingested {count} documents from Notion.[/green]")
-    except ValueError as e:
-        console.print(f"[red]Configuration error: {e}[/red]")
-        raise typer.Exit(1) from None
-    except Exception as e:
-        console.print(f"[red]Ingestion failed: {e}[/red]")
-        raise typer.Exit(1) from None
-
-
-@ingest_app.command("obsidian")
-def ingest_obsidian(
-    vault_path: Annotated[
-        Path | None,
-        typer.Option("--vault", "-v", help="Path to Obsidian vault (overrides config)"),
-    ] = None,
-    since: Annotated[
-        str | None,
-        typer.Option("--since", help="Only ingest files modified since (e.g., 7d, 24h, 2w)"),
-    ] = None,
-    full: Annotated[
-        bool,
-        typer.Option("--full", help="Full re-index (clear existing documents first)"),
-    ] = False,
-) -> None:
-    """Ingest markdown notes from an Obsidian vault."""
-    since_dt = parse_since(since)
-    if since_dt is None and not full:
-        since_dt = get_last_synced_at(Source.OBSIDIAN)
-        if since_dt:
-            console.print(f"[dim]Resuming from last sync: {since_dt:%Y-%m-%d %H:%M}[/dim]")
-
-    capture_time = datetime.now(tz=UTC)
-    console.print("[bold]Ingesting Obsidian vault...[/bold]")
-
-    try:
-        ingester = ObsidianIngester(vault_path=vault_path)
-        count = ingester.ingest(since=since_dt, full_reindex=full)
-        set_last_synced_at(Source.OBSIDIAN, capture_time)
-        console.print(f"[green]Ingested {count} documents from Obsidian.[/green]")
-    except ValueError as e:
-        console.print(f"[red]Configuration error: {e}[/red]")
-        raise typer.Exit(1) from None
-    except Exception as e:
-        console.print(f"[red]Ingestion failed: {e}[/red]")
-        raise typer.Exit(1) from None
+for _entry in _INGESTERS:
+    ingest_app.command(_entry.name, help=_entry.help)(_make_ingest_command(_entry.cls))
 
 
 if __name__ == "__main__":
