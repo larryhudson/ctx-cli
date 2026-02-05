@@ -6,7 +6,7 @@ from datetime import UTC, datetime
 from enum import Enum, StrEnum
 from typing import Literal
 
-from pydantic import BaseModel, Field, computed_field
+from pydantic import BaseModel, Field
 
 
 class Source(StrEnum):
@@ -64,6 +64,7 @@ class DocumentMetadata(BaseModel):
 
     # Common fields
     permalink: str | None = Field(default=None, description="URL to view the item externally")
+    summary: str | None = Field(default=None, description="One-line summary")
 
     # Slack-specific
     slack_channel: str | None = None
@@ -110,26 +111,20 @@ class DocumentMetadata(BaseModel):
 
 
 class Document(BaseModel):
-    """A document to be indexed in ChromaDB."""
+    """A document to be written as a markdown file."""
 
-    id: str = Field(description="Document ID in format {source}:{source_id}:{chunk_index}")
-    content: str = Field(description="The text content to embed and search")
+    id: str = Field(description="Document ID in format {source}:{source_id}")
+    content: str = Field(description="The text content")
     metadata: DocumentMetadata
-
-    @computed_field
-    @property
-    def chunk_index(self) -> int:
-        """Extract chunk index from document ID."""
-        return int(self.id.rsplit(":", 1)[-1])
 
 
 class DocumentChunk(BaseModel):
-    """A chunk of a document with its index."""
+    """A chunk of a document with its index. Used by chunking.py."""
 
     content: str
     chunk_index: int
 
 
-def make_document_id(source: Source, source_id: str, chunk_index: int = 0) -> str:
+def make_document_id(source: Source, source_id: str) -> str:
     """Create a document ID in the standard format."""
-    return f"{source.value}:{source_id}:{chunk_index}"
+    return f"{source.value}:{source_id}"

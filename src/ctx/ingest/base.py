@@ -6,9 +6,9 @@ import logging
 from abc import ABC, abstractmethod
 from datetime import UTC, datetime, timedelta
 
-from ctx.chunking import chunk_by_paragraphs
-from ctx.db import add_documents, delete_by_source
 from ctx.models import Document, DocumentMetadata, Source, make_document_id
+from ctx.summarize import summarize_documents
+from ctx.writer import delete_by_source, write_documents, write_index_files
 
 logger = logging.getLogger(__name__)
 
@@ -96,8 +96,10 @@ class BaseIngester(ABC):
                 logger.exception("Failed to convert item to document")
                 continue
 
-        # Add to database
-        count = add_documents(all_documents)
+        # Summarize and write to markdown files
+        summarize_documents(all_documents)
+        count = write_documents(all_documents)
+        write_index_files(all_documents)
         logger.info("Ingested %d documents from %s", count, self.source.value)
 
         return count
@@ -107,33 +109,25 @@ class BaseIngester(ABC):
         source_id: str,
         content: str,
         metadata: DocumentMetadata,
-        max_tokens: int = 500,
     ) -> list[Document]:
-        """Helper to create documents from content, handling chunking.
+        """Helper to create a Document from content.
 
         Args:
             source_id: The source-specific ID for this item.
             content: The text content.
             metadata: The metadata for this item.
-            max_tokens: Maximum tokens per chunk.
 
         Returns:
-            List of Document objects (may be multiple if chunked).
+            List containing a single Document.
         """
-        chunks = chunk_by_paragraphs(content, max_tokens=max_tokens)
-
-        documents: list[Document] = []
-        for chunk in chunks:
-            doc_id = make_document_id(self.source, source_id, chunk.chunk_index)
-            documents.append(
-                Document(
-                    id=doc_id,
-                    content=chunk.content,
-                    metadata=metadata,
-                )
+        doc_id = make_document_id(self.source, source_id)
+        return [
+            Document(
+                id=doc_id,
+                content=content,
+                metadata=metadata,
             )
-
-        return documents
+        ]
 
 
 def parse_since(since_str: str | None) -> datetime | None:

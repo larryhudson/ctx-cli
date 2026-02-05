@@ -20,6 +20,12 @@ def get_data_dir() -> Path:
     return Path.home() / ".local" / "share" / "ctx"
 
 
+class OutputConfig(BaseModel):
+    """Output configuration for markdown file storage."""
+
+    path: Path = Field(default_factory=lambda: get_data_dir() / "documents")
+
+
 class DatabaseConfig(BaseModel):
     """Database configuration."""
 
@@ -70,6 +76,15 @@ class ObsidianConfig(BaseModel):
     include_folders: list[str] = Field(default_factory=list)
 
 
+class SummaryConfig(BaseModel):
+    """LLM summary configuration."""
+
+    enabled: bool = False
+    model: str = "google-gla:gemini-2.5-flash"
+    gemini_api_key: str | None = None
+    min_length: int = 500  # chars; below this, use first-line extraction
+
+
 class Config(BaseSettings):
     """Main configuration container."""
 
@@ -78,6 +93,7 @@ class Config(BaseSettings):
         env_nested_delimiter="__",
     )
 
+    output: OutputConfig = Field(default_factory=OutputConfig)
     database: DatabaseConfig = Field(default_factory=DatabaseConfig)
     embedding: EmbeddingConfig = Field(default_factory=EmbeddingConfig)
     slack: SlackConfig = Field(default_factory=SlackConfig)
@@ -85,6 +101,7 @@ class Config(BaseSettings):
     github: GitHubConfig = Field(default_factory=GitHubConfig)
     notion: NotionConfig = Field(default_factory=NotionConfig)
     obsidian: ObsidianConfig = Field(default_factory=ObsidianConfig)
+    summary: SummaryConfig = Field(default_factory=SummaryConfig)
 
 
 def load_config(config_path: Path | None = None) -> Config:

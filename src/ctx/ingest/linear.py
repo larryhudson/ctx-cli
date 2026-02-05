@@ -18,9 +18,10 @@ from rich.progress import (
 )
 
 from ctx.config import get_config
-from ctx.db import add_documents, delete_by_source
 from ctx.ingest.base import BaseIngester
 from ctx.models import ContentType, Document, DocumentMetadata, Involvement, Source
+from ctx.summarize import summarize_documents
+from ctx.writer import delete_by_source, write_documents, write_index_files
 
 logger = logging.getLogger(__name__)
 console = Console()
@@ -356,9 +357,12 @@ class LinearIngester(BaseIngester):
             console.print("[yellow]No documents created[/yellow]")
             return 0
 
-        # Add to database
-        console.print(f"[blue]Adding {len(all_documents)} documents to database...[/blue]")
-        count = add_documents(all_documents)
+        # Summarize and write to markdown files
+        console.print(f"[blue]Summarizing {len(all_documents)} documents...[/blue]")
+        summarize_documents(all_documents)
+        console.print(f"[blue]Writing {len(all_documents)} documents...[/blue]")
+        count = write_documents(all_documents)
+        write_index_files(all_documents)
         console.print(f"[green]Successfully ingested {count} documents[/green]")
 
         return count
