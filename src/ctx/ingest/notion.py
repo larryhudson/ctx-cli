@@ -490,12 +490,6 @@ class NotionIngester(BaseIngester):
         console.print(f"[green]Found {len(pages)} pages to process[/green]")
         return pages
 
-    def item_to_documents(self, item: dict[str, Any]) -> list[Document]:
-        """Convert a Notion page to documents (sync version, not used)."""
-        # This is overridden by async processing in ingest()
-        # but required by base class
-        raise NotImplementedError("Use async processing via ingest()")
-
     # --- Async methods for parallel block fetching ---
 
     async def _fetch_blocks_async(

@@ -9,20 +9,11 @@ from pathlib import Path
 
 import yaml
 from rich.console import Console
-from rich.progress import (
-    BarColumn,
-    Progress,
-    SpinnerColumn,
-    TaskProgressColumn,
-    TextColumn,
-    TimeRemainingColumn,
-)
+from rich.progress import Progress, SpinnerColumn, TextColumn
 
 from ctx.config import get_config
 from ctx.ingest.base import BaseIngester
 from ctx.models import ContentType, Document, DocumentMetadata, Involvement, Source
-from ctx.summarize import summarize_documents
-from ctx.writer import delete_by_source, write_documents, write_index_files
 
 logger = logging.getLogger(__name__)
 console = Console()
@@ -251,60 +242,8 @@ class ObsidianIngester(BaseIngester):
             metadata=metadata,
         )
 
-    def ingest(
-        self,
-        since: datetime | None = None,
-        full_reindex: bool = False,
-    ) -> int:
-        """Run the ingestion process with progress display."""
+    def log_ingest_start(self) -> None:
+        """Log vault path and folder config at the start of ingestion."""
         console.print(f"[bold]Ingesting from vault: {self._vault_path}[/bold]")
-
         if self._include_folders:
             console.print(f"[dim]Include folders: {', '.join(self._include_folders)}[/dim]")
-
-        if full_reindex:
-            console.print("[yellow]Full reindex: deleting existing Obsidian documents...[/yellow]")
-            delete_by_source(self.source)
-
-        # Fetch items
-        items = self.fetch_items(since=since)
-
-        if not items:
-            console.print("[yellow]No files found to ingest[/yellow]")
-            return 0
-
-        # Convert to documents with progress bar
-        all_documents: list[Document] = []
-
-        with Progress(
-            SpinnerColumn(),
-            TextColumn("[progress.description]{task.description}"),
-            BarColumn(),
-            TaskProgressColumn(),
-            TimeRemainingColumn(),
-            console=console,
-        ) as progress:
-            task = progress.add_task("Processing files", total=len(items))
-
-            for item in items:
-                try:
-                    documents = self.item_to_documents(item)
-                    all_documents.extend(documents)
-                except Exception:
-                    logger.exception("Failed to convert item to document: %s", item.get("path"))
-                finally:
-                    progress.advance(task)
-
-        if not all_documents:
-            console.print("[yellow]No documents created[/yellow]")
-            return 0
-
-        # Summarize and write to markdown files
-        console.print(f"[blue]Summarizing {len(all_documents)} documents...[/blue]")
-        summarize_documents(all_documents)
-        console.print(f"[blue]Writing {len(all_documents)} documents...[/blue]")
-        count = write_documents(all_documents)
-        write_index_files(all_documents)
-        console.print(f"[green]Successfully ingested {count} documents[/green]")
-
-        return count

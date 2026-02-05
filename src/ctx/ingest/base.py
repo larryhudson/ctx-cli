@@ -6,11 +6,22 @@ import logging
 from abc import ABC, abstractmethod
 from datetime import UTC, datetime, timedelta
 
+from rich.console import Console
+from rich.progress import (
+    BarColumn,
+    Progress,
+    SpinnerColumn,
+    TaskProgressColumn,
+    TextColumn,
+    TimeRemainingColumn,
+)
+
 from ctx.models import Document, DocumentMetadata, Source, make_document_id
 from ctx.summarize import summarize_documents
 from ctx.writer import delete_by_source, write_documents, write_index_files
 
 logger = logging.getLogger(__name__)
+console = Console()
 
 
 class BaseIngester(ABC):
@@ -44,7 +55,6 @@ class BaseIngester(ABC):
         """
         ...
 
-    @abstractmethod
     def item_to_documents(self, item: dict) -> list[Document]:
         """Convert a single item to one or more Documents.
 
@@ -56,7 +66,17 @@ class BaseIngester(ABC):
         Returns:
             List of Document objects (may be multiple if chunked).
         """
-        ...
+        raise NotImplementedError
+
+    def prepare_items(self, items: list[dict]) -> None:  # noqa: B027
+        """Hook called after fetch_items(), before processing.
+
+        Override to prefetch data (e.g. batch user/channel lookups).
+        """
+
+    def log_ingest_start(self) -> None:
+        """Hook called at the start of ingest(). Override for extra startup output."""
+        console.print(f"[bold]Ingesting {self.source.value}...[/bold]")
 
     def ingest(
         self,
@@ -73,34 +93,51 @@ class BaseIngester(ABC):
         Returns:
             Number of documents ingested.
         """
-        logger.info("Starting ingestion for source: %s", self.source.value)
+        self.log_ingest_start()
 
         if full_reindex:
-            logger.info("Full reindex requested, deleting existing documents")
+            console.print(
+                f"[yellow]Full reindex: deleting existing {self.source.value} documents...[/yellow]"
+            )
             delete_by_source(self.source)
 
-        # Fetch items
         items = self.fetch_items(since=since)
-        logger.info("Fetched %d items from %s", len(items), self.source.value)
 
         if not items:
+            console.print("[yellow]No items found to ingest[/yellow]")
             return 0
 
-        # Convert to documents
-        all_documents: list[Document] = []
-        for item in items:
-            try:
-                documents = self.item_to_documents(item)
-                all_documents.extend(documents)
-            except Exception:
-                logger.exception("Failed to convert item to document")
-                continue
+        self.prepare_items(items)
 
-        # Summarize and write to markdown files
+        all_documents: list[Document] = []
+        with Progress(
+            SpinnerColumn(),
+            TextColumn("[progress.description]{task.description}"),
+            BarColumn(),
+            TaskProgressColumn(),
+            TimeRemainingColumn(),
+            console=console,
+        ) as progress:
+            task = progress.add_task("Processing items", total=len(items))
+            for item in items:
+                try:
+                    documents = self.item_to_documents(item)
+                    all_documents.extend(documents)
+                except Exception:
+                    logger.exception("Failed to convert item to document")
+                finally:
+                    progress.advance(task)
+
+        if not all_documents:
+            console.print("[yellow]No documents created[/yellow]")
+            return 0
+
+        console.print(f"[blue]Summarizing {len(all_documents)} documents...[/blue]")
         summarize_documents(all_documents)
+        console.print(f"[blue]Writing {len(all_documents)} documents...[/blue]")
         count = write_documents(all_documents)
         write_index_files(all_documents)
-        logger.info("Ingested %d documents from %s", count, self.source.value)
+        console.print(f"[green]Successfully ingested {count} documents[/green]")
 
         return count
 

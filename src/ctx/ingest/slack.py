@@ -10,20 +10,11 @@ from typing import Any
 
 import httpx
 from rich.console import Console
-from rich.progress import (
-    BarColumn,
-    Progress,
-    SpinnerColumn,
-    TaskProgressColumn,
-    TextColumn,
-    TimeRemainingColumn,
-)
+from rich.progress import Progress, SpinnerColumn, TextColumn
 
 from ctx.config import get_config
 from ctx.ingest.base import BaseIngester
 from ctx.models import ContentType, Document, DocumentMetadata, Involvement, Source
-from ctx.summarize import summarize_documents
-from ctx.writer import delete_by_source, write_documents, write_index_files
 
 logger = logging.getLogger(__name__)
 console = Console()
@@ -518,59 +509,7 @@ class SlackIngester(BaseIngester):
             metadata=metadata,
         )
 
-    def ingest(
-        self,
-        since: datetime | None = None,
-        full_reindex: bool = False,
-    ) -> int:
-        """Run the ingestion process with progress display."""
-        if full_reindex:
-            console.print("[yellow]Full reindex: deleting existing Slack documents...[/yellow]")
-            delete_by_source(self.source)
-
-        # Fetch items
-        items = self.fetch_items(since=since)
-
-        if not items:
-            console.print("[yellow]No threads found to ingest[/yellow]")
-            return 0
-
-        # Batch prefetch channels and users to minimize API calls during processing
+    def prepare_items(self, items: list[dict]) -> None:
+        """Batch prefetch channels and users to minimize API calls during processing."""
         self._prefetch_channels(items)
         self._prefetch_users(items)
-
-        # Convert to documents with progress bar and ETA
-        all_documents: list[Document] = []
-
-        with Progress(
-            SpinnerColumn(),
-            TextColumn("[progress.description]{task.description}"),
-            BarColumn(),
-            TaskProgressColumn(),
-            TimeRemainingColumn(),
-            console=console,
-        ) as progress:
-            task = progress.add_task("Processing threads", total=len(items))
-
-            for item in items:
-                try:
-                    documents = self.item_to_documents(item)
-                    all_documents.extend(documents)
-                except Exception:
-                    logger.exception("Failed to convert item to document")
-                finally:
-                    progress.advance(task)
-
-        if not all_documents:
-            console.print("[yellow]No documents created[/yellow]")
-            return 0
-
-        # Summarize and write to markdown files
-        console.print(f"[blue]Summarizing {len(all_documents)} documents...[/blue]")
-        summarize_documents(all_documents)
-        console.print(f"[blue]Writing {len(all_documents)} documents...[/blue]")
-        count = write_documents(all_documents)
-        write_index_files(all_documents)
-        console.print(f"[green]Successfully ingested {count} documents[/green]")
-
-        return count
