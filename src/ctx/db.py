@@ -139,6 +139,7 @@ def search(
     source: Source | list[Source] | None = None,
     since_timestamp: int | None = None,
     involvement: str | None = None,
+    extra_filters: dict[str, str] | None = None,
 ) -> list[dict]:
     """Search the collection with optional filters.
 
@@ -148,13 +149,17 @@ def search(
         source: Filter by source(s).
         since_timestamp: Only return documents after this Unix timestamp.
         involvement: Filter by involvement type.
+        extra_filters: Additional metadata filters as key=value pairs.
 
     Returns:
         List of result dicts with id, content, metadata, and distance.
     """
     collection = get_db().collection
     where = _build_where_clause(
-        source=source, since_timestamp=since_timestamp, involvement=involvement
+        source=source,
+        since_timestamp=since_timestamp,
+        involvement=involvement,
+        extra_filters=extra_filters,
     )
 
     results = collection.query(
@@ -270,11 +275,90 @@ def get_document_by_id(doc_id: str) -> dict | None:
     }
 
 
+def get_documents_by_ids(doc_ids: list[str]) -> list[dict]:
+    """Get multiple documents by IDs.
+
+    Args:
+        doc_ids: List of document IDs.
+
+    Returns:
+        List of dicts with id, content, and metadata. Missing IDs are omitted.
+    """
+    if not doc_ids:
+        return []
+
+    collection = get_db().collection
+
+    results = collection.get(
+        ids=doc_ids,
+        include=["documents", "metadatas"],
+    )
+
+    formatted: list[dict] = []
+    if results["ids"]:
+        for i, doc_id in enumerate(results["ids"]):
+            formatted.append(
+                {
+                    "id": doc_id,
+                    "content": results["documents"][i] if results["documents"] else None,
+                    "metadata": results["metadatas"][i] if results["metadatas"] else None,
+                }
+            )
+
+    return formatted
+
+
+def list_documents(
+    *,
+    n_results: int = 10,
+    source: Source | list[Source] | None = None,
+    since_timestamp: int | None = None,
+    extra_filters: dict[str, str] | None = None,
+) -> list[dict]:
+    """List documents with optional filters (no search query).
+
+    Args:
+        n_results: Maximum number of results to return.
+        source: Filter by source(s).
+        since_timestamp: Only return documents after this Unix timestamp.
+        extra_filters: Additional metadata filters as key=value pairs.
+
+    Returns:
+        List of result dicts with id, content, and metadata.
+    """
+    collection = get_db().collection
+    where = _build_where_clause(
+        source=source,
+        since_timestamp=since_timestamp,
+        extra_filters=extra_filters,
+    )
+
+    results = collection.get(
+        where=where,
+        limit=n_results,
+        include=["documents", "metadatas"],
+    )
+
+    formatted: list[dict] = []
+    if results["ids"]:
+        for i, doc_id in enumerate(results["ids"]):
+            formatted.append(
+                {
+                    "id": doc_id,
+                    "content": results["documents"][i] if results["documents"] else None,
+                    "metadata": results["metadatas"][i] if results["metadatas"] else None,
+                }
+            )
+
+    return formatted
+
+
 def _build_where_clause(
     *,
     source: Source | list[Source] | None = None,
     since_timestamp: int | None = None,
     involvement: str | None = None,
+    extra_filters: dict[str, str] | None = None,
 ) -> dict | None:
     """Build a ChromaDB where clause from filter parameters."""
     where_clauses: list[dict] = []
@@ -290,6 +374,10 @@ def _build_where_clause(
 
     if involvement is not None:
         where_clauses.append({"my_involvement": involvement})
+
+    if extra_filters:
+        for key, value in extra_filters.items():
+            where_clauses.append({key: value})
 
     if len(where_clauses) == 0:
         return None
