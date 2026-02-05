@@ -87,6 +87,10 @@ A Claude Code hook runs after every Edit/Write on Python files:
 
 Fix any reported errors before proceeding.
 
+## Git Workflow
+
+- One commit per PR. Squash before pushing if needed.
+
 ## Code Style
 
 - Line length: 100 characters
