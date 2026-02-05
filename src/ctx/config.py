@@ -4,7 +4,6 @@ from __future__ import annotations
 
 import tomllib
 from pathlib import Path
-from typing import Literal
 
 from pydantic import BaseModel, Field
 from pydantic_settings import BaseSettings, SettingsConfigDict
@@ -24,19 +23,6 @@ class OutputConfig(BaseModel):
     """Output configuration for markdown file storage."""
 
     path: Path = Field(default_factory=lambda: get_data_dir() / "documents")
-
-
-class DatabaseConfig(BaseModel):
-    """Database configuration."""
-
-    path: Path = Field(default_factory=lambda: get_data_dir() / "chroma_data")
-
-
-class EmbeddingConfig(BaseModel):
-    """Embedding model configuration."""
-
-    model: Literal["default", "openai"] = "default"
-    openai_api_key: str | None = None
 
 
 class SlackConfig(BaseModel):
@@ -94,8 +80,6 @@ class Config(BaseSettings):
     )
 
     output: OutputConfig = Field(default_factory=OutputConfig)
-    database: DatabaseConfig = Field(default_factory=DatabaseConfig)
-    embedding: EmbeddingConfig = Field(default_factory=EmbeddingConfig)
     slack: SlackConfig = Field(default_factory=SlackConfig)
     linear: LinearConfig = Field(default_factory=LinearConfig)
     github: GitHubConfig = Field(default_factory=GitHubConfig)

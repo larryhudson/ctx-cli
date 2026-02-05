@@ -150,42 +150,11 @@ uv run ctx ingest linear --full
 
 Time formats for `--since`: `24h`, `7d`, `2w`, `30d`
 
-### Searching
-
-```bash
-# Basic semantic search
-uv run ctx search "authentication flow"
-
-# Filter by source
-uv run ctx search "bug fix" --source github --source linear
-
-# Filter by time
-uv run ctx search "meeting notes" --since 7d
-
-# Filter by involvement
-uv run ctx search "review" --involvement reviewer
-
-# Keyword search (exact matching, no embeddings)
-uv run ctx search "TODO" --keyword
-
-# Different output formats
-uv run ctx search "deploy" --format markdown  # Human-readable (default)
-uv run ctx search "deploy" --format table     # Rich table
-uv run ctx search "deploy" --format json      # For LLM consumption
-
-# Limit results
-uv run ctx search "api" --limit 20
-```
-
 ### Other Commands
 
 ```bash
-# View database statistics
+# View sync status
 uv run ctx info
-
-# Retrieve a specific document by ID
-uv run ctx get "slack:C123-1234567.123"
-uv run ctx get "linear:ENG-123" --format json
 ```
 
 ## Document Format
@@ -218,8 +187,6 @@ src/ctx/
 ├── config.py      # TOML configuration (~/.config/ctx/config.toml)
 ├── writer.py      # Markdown file writer (date-organized output)
 ├── summarize.py   # LLM summarization via PydanticAI
-├── db.py          # ChromaDB connection and queries
-├── chunking.py    # Token-aware text chunking
 ├── ingest/
 │   ├── base.py    # BaseIngester abstract class
 │   ├── slack.py   # Slack threads ingester

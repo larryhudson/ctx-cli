@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from datetime import UTC, datetime
-from enum import Enum, StrEnum
+from enum import StrEnum
 from typing import Literal
 
 from pydantic import BaseModel, Field
@@ -40,11 +40,7 @@ class Involvement(StrEnum):
 
 
 class DocumentMetadata(BaseModel):
-    """Base metadata that all documents share.
-
-    ChromaDB only supports flat values (str, int, float, bool),
-    so we keep everything at the top level.
-    """
+    """Base metadata that all documents share."""
 
     # Required fields
     source: Source
@@ -94,21 +90,6 @@ class DocumentMetadata(BaseModel):
     obsidian_folder: str | None = None
     obsidian_tags: str | None = Field(default=None, description="Comma-separated tags")
 
-    def to_chroma_metadata(self) -> dict[str, str | int | float | bool]:
-        """Convert to ChromaDB-compatible metadata dict.
-
-        Excludes None values and converts enums to strings.
-        """
-        result: dict[str, str | int | float | bool] = {}
-        for key, value in self.model_dump().items():
-            if value is None:
-                continue
-            if isinstance(value, Enum):
-                result[key] = value.value
-            else:
-                result[key] = value
-        return result
-
 
 class Document(BaseModel):
     """A document to be written as a markdown file."""
@@ -116,13 +97,6 @@ class Document(BaseModel):
     id: str = Field(description="Document ID in format {source}:{source_id}")
     content: str = Field(description="The text content")
     metadata: DocumentMetadata
-
-
-class DocumentChunk(BaseModel):
-    """A chunk of a document with its index. Used by chunking.py."""
-
-    content: str
-    chunk_index: int
 
 
 def make_document_id(source: Source, source_id: str) -> str:
