@@ -102,13 +102,13 @@ def add_documents(documents: list[Document]) -> int:
     contents = [doc.content for doc in documents]
     metadatas = [doc.metadata.to_chroma_metadata() for doc in documents]
 
-    collection.add(
+    collection.upsert(
         ids=ids,
         documents=contents,
         metadatas=metadatas,
     )
 
-    logger.info("Added %d documents to collection", len(documents))
+    logger.info("Upserted %d documents to collection", len(documents))
     return len(documents)
 
 
