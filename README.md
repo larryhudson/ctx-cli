@@ -1,10 +1,10 @@
 # ctx
 
-A CLI tool that aggregates work context from multiple sources into a unified semantic search database.
+A CLI tool that aggregates work context from multiple sources into structured markdown files.
 
 ## Overview
 
-**ctx** pulls data from Slack, Linear, GitHub, Notion, and Obsidian into a ChromaDB vector database, enabling semantic and keyword search across all your work context in one place.
+**ctx** pulls data from Slack, Linear, GitHub, Notion, and Obsidian and writes them as markdown files with YAML frontmatter, organized by date. Each day gets an index file with one-line summaries, making it easy for AI agents and humans to browse work context.
 
 This is particularly useful for:
 - AI agents that need relevant context from your work history
@@ -13,12 +13,12 @@ This is particularly useful for:
 
 ## Features
 
-- **Unified search** - Semantic and keyword search across all sources
-- **Multiple output formats** - Markdown, table, or JSON for LLM consumption
-- **Flexible filtering** - By source, time range, or involvement level
+- **Markdown output** - Each document stored as a markdown file with YAML frontmatter
+- **Date-organized** - Files grouped into `YYYY/MM/DD_dayname/` directories
+- **Day indexes** - Auto-generated `_index.md` per day with one-line summaries
+- **LLM summarization** - Optional one-line summaries via PydanticAI (Gemini by default)
 - **Incremental sync** - Only fetch new content since last ingestion
-- **Token-aware chunking** - Preserves semantic boundaries for better search results
-- **Local-first** - Embeddings run locally by default (no API costs)
+- **Multiple sources** - Slack, Linear, GitHub, Notion, Obsidian
 
 ## Installation
 
@@ -41,13 +41,14 @@ pip install -e .
 All configuration lives in `~/.config/ctx/config.toml`:
 
 ```toml
-[database]
-path = "~/.local/share/ctx/chroma_data"
+[output]
+path = "~/.local/share/ctx/documents"  # Where markdown files are written
 
-[embedding]
-model = "default"  # Uses all-MiniLM-L6-v2 locally (no API key needed)
-# model = "openai"
-# openai_api_key = "sk-..."
+[summary]
+enabled = false                        # Enable LLM-generated summaries
+model = "google-gla:gemini-2.5-flash"  # PydanticAI model identifier
+# gemini_api_key = "..."               # Or set GEMINI_API_KEY env var
+min_length = 500                       # Docs shorter than this use first-line extraction
 
 [slack]
 token = "xoxc-..."   # Browser token (see setup below)
@@ -130,7 +131,7 @@ include_folders = ["daily-notes", "meetings"]
 
 ### Ingesting Data
 
-Pull data from each source into the database:
+Pull data from each source into markdown files:
 
 ```bash
 # Ingest from specific sources
@@ -143,7 +144,7 @@ uv run ctx ingest obsidian
 # Incremental sync (only new content since last week)
 uv run ctx ingest slack --since 7d
 
-# Full re-index (clears existing data for that source)
+# Full re-index (clears existing files for that source)
 uv run ctx ingest linear --full
 ```
 
@@ -183,20 +184,31 @@ uv run ctx search "api" --limit 20
 uv run ctx info
 
 # Retrieve a specific document by ID
-uv run ctx get "slack:C123-1234567.123:0"
-uv run ctx get "linear:ENG-123:0" --format json
+uv run ctx get "slack:C123-1234567.123"
+uv run ctx get "linear:ENG-123" --format json
 ```
 
 ## Document Format
 
-Documents are stored with the ID format: `{source}:{source_id}:{chunk_index}`
+Each document is a markdown file with YAML frontmatter, stored in a date-organized directory:
 
-Examples:
-- `slack:C123-1234567.123:0` - Slack thread
-- `linear:ENG-123:0` - Linear issue
-- `github:org/repo/pr/42:1` - GitHub PR (chunk 2)
-- `notion:abc123:0` - Notion page
-- `obsidian:daily-notes/2024-01-15.md:0` - Obsidian note
+```
+~/.local/share/ctx/documents/
+└── 2026/
+    └── 02/
+        └── 05_wednesday/
+            ├── _index.md                                    # Day summary
+            ├── 2026-02-05T09-30-00_slack_C123-1234567.md
+            ├── 2026-02-05T10-00-00_linear_ENG-123.md
+            └── 2026-02-05T14-00-00_github_org-repo-pr-42.md
+```
+
+Document IDs use the format `{source}:{source_id}`:
+- `slack:C123-1234567.123` - Slack thread
+- `linear:ENG-123` - Linear issue
+- `github:org/repo/pr/42` - GitHub PR
+- `notion:abc123` - Notion page
+- `obsidian:daily-notes/2024-01-15.md` - Obsidian note
 
 ## Architecture
 
@@ -204,6 +216,8 @@ Examples:
 src/ctx/
 ├── models.py      # Pydantic data models
 ├── config.py      # TOML configuration (~/.config/ctx/config.toml)
+├── writer.py      # Markdown file writer (date-organized output)
+├── summarize.py   # LLM summarization via PydanticAI
 ├── db.py          # ChromaDB connection and queries
 ├── chunking.py    # Token-aware text chunking
 ├── ingest/
@@ -251,24 +265,6 @@ uv run pytest
 4. Add CLI command in `cli/main.py`
 
 See `src/ctx/ingest/base.py` for the abstract interface and helper methods.
-
-## Sandboxed Execution
-
-For isolated search (e.g., in CI or untrusted environments), use the Docker sandbox:
-
-```bash
-# Build the container
-./scripts/sandbox.sh build
-
-# Start the container (mounts ChromaDB data read-only)
-./scripts/sandbox.sh start
-
-# Search in the sandbox
-./scripts/sandbox.sh search "query"
-
-# Stop and cleanup
-./scripts/sandbox.sh stop
-```
 
 ## License
 
